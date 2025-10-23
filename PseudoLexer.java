@@ -1,5 +1,6 @@
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
 
 public class PseudoLexer extends Lexer {
     public static final int EOF_TYPE = -1;
@@ -32,6 +33,15 @@ public class PseudoLexer extends Lexer {
     public static final int MULT            = 23;  // *
     public static final int DIV             = 24;  // /
 
+    // --- INICIO: Operadores Relacionales ---
+    public static final int LT              = 25;  // <
+    public static final int GT              = 26;  // >
+    public static final int LTE             = 27;  // <=
+    public static final int GTE             = 28;  // >=
+    public static final int NEQ             = 29;  // !=
+    // --- FIN: Operadores Relacionales ---
+
+
     private static final Map<String,Integer> KEYWORDS = new HashMap<>();
     static {
         KEYWORDS.put("inicio-programa", INICIO_PROGRAMA);
@@ -48,7 +58,48 @@ public class PseudoLexer extends Lexer {
         KEYWORDS.put("fin-mientras", FIN_MIENTRAS);
     }
 
+    // --- Código añadido para el generador de tuplas ---
+    private ArrayList<Token> tokens = new ArrayList<>();
+
+    /**
+     * Constructor vacío requerido por el PseudoParser del PDF.
+     */
+    public PseudoLexer() {
+        super(""); // Llama al super con un string vacío, no se usará
+    }
+
+    /**
+     * Llena la lista interna de tokens a partir de un string de entrada.
+     * @param input El código fuente completo.
+     */
+    public void analizar(String input) {
+        // No reasignamos el campo final heredado. Creamos un lexer temporal.
+        tokens.clear(); // Limpia tokens de análisis anteriores
+
+        PseudoLexer temp = new PseudoLexer(input);
+        Token t = temp.nextToken();
+        while (t.type != EOF_TYPE) {
+            tokens.add(t);
+            t = temp.nextToken();
+        }
+        tokens.add(t); // Añade el token EOF al final
+    }
+
+    /**
+     * Devuelve la lista de tokens generada por analizar().
+     * @return ArrayList de Tokens.
+     */
+    public ArrayList<Token> getTokens() {
+        return tokens;
+    }
+
+    /**
+     * Constructor original (se mantiene por compatibilidad).
+     * @param input El código fuente.
+     */
     public PseudoLexer(String input) { super(input); }
+    // --- Fin del código añadido ---
+
 
     @Override
     public Token nextToken() {
@@ -71,6 +122,40 @@ public class PseudoLexer extends Lexer {
                         continue;
                     }
                     return new Token(DIV, "/");
+
+                // --- INICIO: Casos para Operadores Relacionales ---
+                case '<':
+                    // Revisa si el siguiente char es '='
+                    if (p + 1 < input.length() && input.charAt(p + 1) == '=') {
+                        consume(); // consume '<'
+                        consume(); // consume '='
+                        return new Token(LTE, "<=");
+                    } else {
+                        consume(); // consume '<'
+                        return new Token(LT, "<");
+                    }
+                case '>':
+                    // Revisa si el siguiente char es '='
+                    if (p + 1 < input.length() && input.charAt(p + 1) == '=') {
+                        consume(); // consume '>'
+                        consume(); // consume '='
+                        return new Token(GTE, ">=");
+                    } else {
+                        consume(); // consume '>'
+                        return new Token(GT, ">");
+                    }
+                case '!':
+                    // Revisa si el siguiente char es '='
+                    if (p + 1 < input.length() && input.charAt(p + 1) == '=') {
+                        consume(); // consume '!'
+                        consume(); // consume '='
+                        return new Token(NEQ, "!=");
+                    } else {
+                        // '!' por sí solo no es un token válido en este lenguaje
+                        throw new RuntimeException("Caracter inválido: '!' debe ser seguido por '='");
+                    }
+                    // --- FIN: Casos para Operadores Relacionales ---
+
                 case '"':
                     return cadena();
                 default:
@@ -110,6 +195,15 @@ public class PseudoLexer extends Lexer {
             case MENOS: return "MENOS";
             case MULT: return "MULT";
             case DIV: return "DIV";
+
+            // --- INICIO: Nombres de Operadores Relacionales ---
+            case LT: return "LT";
+            case GT: return "GT";
+            case LTE: return "LTE";
+            case GTE: return "GTE";
+            case NEQ: return "NEQ";
+            // --- FIN: Nombres de Operadores Relacionales ---
+
             default: return "t" + t;
         }
     }

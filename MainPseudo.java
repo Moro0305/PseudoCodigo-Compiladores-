@@ -5,33 +5,58 @@ public class MainPseudo {
                 "variables: numeroDeElementos, promedio, i, elemento",
                 "leer numeroDeElementos",
                 "promedio = 0",
-                "repite (i, 0, numeroDeElementos)",
+                "i = 0",
+                "mientras (i < numeroDeElementos)", // <-- Usando 'mientras' del PDF
                 "    leer elemento",
                 "    promedio = promedio + elemento",
-                "fin-repite",
+                "    i = i + 1",
+                "fin-mientras",
+                "promedio = promedio / numeroDeElementos",
+                "escribir \"El promedio es\", promedio",
                 "fin-programa"
         );
 
-        try {
-            PseudoLexer lex = new PseudoLexer(programa);
-            PseudoParser p = new PseudoParser(lex);
-            p.programa();
-            System.out.println("Programa válido");
+        // --- INICIO DE MODIFICACIONES ---
+        // Adaptado de "PruebaTuplas"
 
-            // --- Código para demostrar la tabla de símbolos ---
-            System.out.println("\n*** Tabla de símbolos ***");
-            // Se obtiene la tabla de símbolos del parser
-            TablaSimbolos ts = p.getTablaSimbolos();
-            // Se recorren los valores de la tabla y se imprimen
-            for (Simbolo s : ts.getSimbolos().values()) {
-                System.out.println(s);
+        try {
+            // 1. Análisis Léxico
+            PseudoLexer lex = new PseudoLexer();
+            lex.analizar(programa); // [cite: 625]
+
+            System.out.println("*** Análisis léxico ***\n");
+            for (Token t: lex.getTokens()) {
+                System.out.println(t); // [cite: 627-630]
             }
-            // --- Fin del código de demostración ---
+
+            // 2. Análisis Sintáctico y Generación de Tuplas
+            System.out.println("\n*** Análisis sintáctico y Generación ***\n");
+            TablaSimbolos ts = new TablaSimbolos();
+            PseudoGenerador generador = new PseudoGenerador(); // Constructor vacío, los tokens no son necesarios aquí
+            PseudoParser parser = new PseudoParser(ts, generador); // [cite: 633]
+            parser.analizar(lex); // [cite: 633]
+
+            System.out.println("Análisis sintáctico y generación completados.");
+
+            // 3. Imprimir Tabla de Símbolos
+            System.out.println("\n*** Tabla de símbolos ***");
+            for (Simbolo s : ts.getSimbolos().values()) {
+                System.out.println(s); // [cite: 635-636]
+            }
+
+            // 4. Imprimir Tuplas Generadas
+            System.out.println("\n*** Tuplas generadas ***");
+            int i = 0;
+            for (Tupla t : generador.getTuplas()) {
+                System.out.println((i++) + ": " + t); // [cite: 638-640]
+            }
+            // --- FIN DE MODIFICACIONES ---
 
         } catch (SemanticException e) {
             System.out.println("ERROR Semántico: " + e.getMessage());
         } catch (RuntimeException e) {
             System.out.println("ERROR: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

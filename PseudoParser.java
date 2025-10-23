@@ -1,155 +1,268 @@
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
 
-public class PseudoParser extends ParserK {
-    // Se reemplaza el HashSet por una instancia de TablaSimbolos
-    private final TablaSimbolos ts;
-    // Se crea una instancia del tipo de dato 'real'
-    private final TipoIncorporado real;
+// NO EXTIENDE ParserK
+public class PseudoParser {
+    private ArrayList<Token> tokens;
+    private int indiceToken = 0;
+    private TablaSimbolos ts;
+    private TipoIncorporado real;
+    private PseudoGenerador generador;
+    private boolean errorSintactico = false; // Para manejo de errores
+    private PseudoLexer lexer; // guardamos el lexer para usar métodos de instancia como getTokenName
 
-    public PseudoParser(Lexer input) throws SemanticException {
-        super(input, 2);
-        this.ts = new TablaSimbolos();
-        this.real = new TipoIncorporado("real");
-        // Se registra el tipo de dato 'real' en la tabla de símbolos al inicio
-        ts.definir(real);
+    public PseudoParser(TablaSimbolos ts, PseudoGenerador generador) {
+        this.ts = ts;
+        this.generador = generador;
+        // [cite: 504-506]
     }
 
-    // programa : 'inicio-programa' declVars? enunciados 'fin-programa'
-    public void programa() throws SemanticException {
-        match(PseudoLexer.INICIO_PROGRAMA);
-        if (LA(1) == PseudoLexer.VARIABLES) declVars();
+    public void analizar(PseudoLexer lexer) throws SemanticException {
+        this.lexer = lexer; // guardar referencia al lexer
+        this.tokens = lexer.getTokens(); // [cite: 508]
+        this.indiceToken = 0;
+        this.errorSintactico = false;
+
+        this.real = new TipoIncorporado("real");
+        ts.definir(real); // [cite: 509-510]
+
+        programa(); // Inicia el análisis
+
+        if (errorSintactico) {
+            throw new SyntaxException("Error de sintaxis. Compilación detenida.");
+        }
+        if (indiceToken != tokens.size() - 1) { // -1 por el EOF
+            System.out.println("Error: Se esperaba fin de programa.");
+        }
+    }
+
+    // Método 'match' adaptado del PDF [cite: 521]
+    private boolean match(int tokenType) {
+        if (indiceToken >= tokens.size()) return false;
+
+        Token t = tokens.get(indiceToken);
+        if (t.type == tokenType) {
+            indiceToken++;
+            return true;
+        } else {
+            String esperado = (lexer != null) ? lexer.getTokenName(tokenType) : ("t" + tokenType);
+            System.out.println("Error de sintaxis: Se esperaba " + esperado + " pero se encontró " + t.text);
+            errorSintactico = true;
+            return false;
+        }
+    }
+
+    // Método para ver el token actual
+    private Token currentToken() {
+        if (indiceToken >= tokens.size()) return tokens.get(tokens.size() -1); // EOF
+        return tokens.get(indiceToken);
+    }
+
+    // <Programa> -> inicio-programa <DeclVars>? <Enunciados> fin-programa
+    private void programa() throws SemanticException {
+        if (!match(PseudoLexer.INICIO_PROGRAMA)) return;
+
+        if (currentToken().type == PseudoLexer.VARIABLES) {
+            declVars();
+        }
+
         enunciados();
-        match(PseudoLexer.FIN_PROGRAMA);
+
+        if (match(PseudoLexer.FIN_PROGRAMA)) {
+            generador.crearTuplaFinPrograma(); // [cite: 524-525]
+        } else {
+            System.out.println("Error: Se esperaba 'fin-programa'");
+        }
     }
 
     // declVars : 'variables' ':' ID (',' ID)*
     private void declVars() throws SemanticException {
         match(PseudoLexer.VARIABLES);
         match(PseudoLexer.DOSPUNTOS);
-        String id = LT(1).text;
-        // Se define una nueva variable en la tabla de símbolos
-        ts.definir(new Variable(id, real));
-        match(PseudoLexer.ID);
 
-        while (LA(1) == PseudoLexer.COMA) {
+        Token id = currentToken();
+        if (!match(PseudoLexer.ID)) return;
+        ts.definir(new Variable(id.text, real));
+
+        while (currentToken().type == PseudoLexer.COMA) {
             match(PseudoLexer.COMA);
-            id = LT(1).text;
-            // Se definen las variables adicionales
-            ts.definir(new Variable(id, real));
-            match(PseudoLexer.ID);
+            id = currentToken();
+            if (!match(PseudoLexer.ID)) break;
+            ts.definir(new Variable(id.text, real));
         }
     }
 
-    // enunciados : (enunciado)*
+    // <Enunciados> -> (<Enunciado>)*
     private void enunciados() throws SemanticException {
-        while (iniciaEnunciado(LA(1))) {
+        while (iniciaEnunciado()) {
             enunciado();
         }
     }
 
-    private boolean iniciaEnunciado(int la1) {
+    private boolean iniciaEnunciado() {
+        if (errorSintactico) return false;
+        int la1 = currentToken().type;
         return la1 == PseudoLexer.ID ||
                 la1 == PseudoLexer.LEER ||
                 la1 == PseudoLexer.ESCRIBIR ||
-                la1 == PseudoLexer.REPITE;
+                la1 == PseudoLexer.SI ||       // <-- AÑADIDO
+                la1 == PseudoLexer.MIENTRAS;  // <-- AÑADIDO
+        // 'repite' no está en el PDF 'Unidad 5b', se omite.
     }
 
-    // enunciado : asignacion | leer | escribir | repite
+    // <Enunciado> -> <Asignacion> | <Leer> | <Escribir> | <Si> | <Mientras>
     private void enunciado() throws SemanticException {
-        if (LA(1) == PseudoLexer.ID) {
+        if (errorSintactico) return;
+
+        int la1 = currentToken().type;
+        if (la1 == PseudoLexer.ID) {
             asignacion();
-        } else if (LA(1) == PseudoLexer.LEER) {
+        } else if (la1 == PseudoLexer.LEER) {
             leer();
-        } else if (LA(1) == PseudoLexer.ESCRIBIR) {
+        } else if (la1 == PseudoLexer.ESCRIBIR) {
             escribir();
-        } else if (LA(1) == PseudoLexer.REPITE) {
-            repite();
-        } else {
-            throw new MismatchedTokenException("Enunciado inesperado: " + LT(1));
+        } else if (la1 == PseudoLexer.SI) {
+            si(); // [cite: 582]
+        } else if (la1 == PseudoLexer.MIENTRAS) {
+            mientras(); // [cite: 597]
         }
     }
 
-    // asignacion : ID '=' expr
+    // <Asignacion> -> ID = <Valor> (<OperadorAritmetico> <Valor>)?
+    // Adaptado del PDF [cite: 527-538]
     private void asignacion() throws SemanticException {
-        String id = LT(1).text;
-        match(PseudoLexer.ID);
-        validarDeclarada(id);
-        match(PseudoLexer.EQ);
-        expr();
+        Token var = currentToken();
+        if (!match(PseudoLexer.ID)) return;
+        validarDeclarada(var.text); // Validación semántica
+
+        if (!match(PseudoLexer.EQ)) return;
+
+        Token val1 = valor(); // <Valor>
+
+        int opType = currentToken().type;
+        if (opType == PseudoLexer.MAS || opType == PseudoLexer.MENOS || opType == PseudoLexer.MULT || opType == PseudoLexer.DIV) {
+            Token op = currentToken();
+            match(opType);
+            Token val2 = valor(); // <Valor>
+            generador.crearTuplaAsignacion(var, val1, op, val2); // [cite: 533] adaptado
+        } else {
+            generador.crearTuplaAsignacion(var, val1); // [cite: 533] adaptado
+        }
     }
 
-    // leer : 'leer' ID
+    // <Leer> -> leer ID
+    // Adaptado del PDF [cite: 539-549]
     private void leer() throws SemanticException {
         match(PseudoLexer.LEER);
-        String id = LT(1).text;
-        match(PseudoLexer.ID);
-        validarDeclarada(id);
+        Token var = currentToken();
+        if (!match(PseudoLexer.ID)) return;
+        validarDeclarada(var.text); // Validación semántica
+        generador.crearTuplaLeer(var); // [cite: 544]
     }
 
-    // escribir : 'escribir' expr
+    // <Escribir> -> escribir (<Valor> | CADENA) (',' ID)?
+    // Adaptado del PDF [cite: 550-578]
     private void escribir() throws SemanticException {
         match(PseudoLexer.ESCRIBIR);
-        expr();
-    }
 
-    private void repite() throws SemanticException {
-        match(PseudoLexer.REPITE);
-        match(PseudoLexer.LPAREN);
-        String idx = LT(1).text;
-        match(PseudoLexer.ID);
-        validarDeclarada(idx);
-        match(PseudoLexer.COMA);
-        expr();  // valor inicial
-        match(PseudoLexer.COMA);
-        expr();  // valor final
-        match(PseudoLexer.RPAREN);
-        while (iniciaEnunciado(LA(1))) enunciado();
-        match(PseudoLexer.FIN_REPITE);
-    }
-
-    private void expr() throws SemanticException {
-        term();
-        while (LA(1) == PseudoLexer.MAS || LA(1) == PseudoLexer.MENOS) {
-            consume();
-            term();
-        }
-    }
-
-    private void term() throws SemanticException {
-        factor();
-        while (LA(1) == PseudoLexer.MULT || LA(1) == PseudoLexer.DIV) {
-            consume();
-            factor();
-        }
-    }
-
-    private void factor() throws SemanticException {
-        if (LA(1) == PseudoLexer.NUM) {
-            match(PseudoLexer.NUM);
-        } else if (LA(1) == PseudoLexer.ID) {
-            String id = LT(1).text;
-            match(PseudoLexer.ID);
-            validarDeclarada(id);
-        } else if (LA(1) == PseudoLexer.LPAREN) {
-            match(PseudoLexer.LPAREN);
-            expr();
-            match(PseudoLexer.RPAREN);
+        Token val1 = currentToken();
+        if (val1.type == PseudoLexer.CADENA) {
+            match(PseudoLexer.CADENA);
+            if (currentToken().type == PseudoLexer.COMA) {
+                match(PseudoLexer.COMA);
+                Token var = currentToken();
+                if (!match(PseudoLexer.ID)) return;
+                validarDeclarada(var.text);
+                generador.crearTuplaEscribir(val1, var); // 'escribir "cadena", var' [cite: 558]
+            } else {
+                generador.crearTuplaEscribir(val1); // 'escribir "cadena"' [cite: 564]
+            }
         } else {
-            throw new MismatchedTokenException("Expresión inesperada: " + LT(1));
+            Token var = valor(); // 'escribir var' o 'escribir num' (tratado como valor)
+            generador.crearTuplaEscribir(var); // [cite: 573]
         }
     }
 
-    // Se modifica el método para usar la TablaSimbolos
+    // <Si> -> si <Comparacion> entonces <Enunciados> fin-si
+    // PDF [cite: 579-593]
+    private void si() throws SemanticException {
+        match(PseudoLexer.SI);
+
+        int indiceTuplaComp = generador.getIndiceSiguienteTupla(); // [cite: 581]
+        comparacion();
+
+        if (!match(PseudoLexer.ENTONCES)) return;
+
+        enunciados();
+
+        if (match(PseudoLexer.FIN_SI)) {
+            generador.conectarSi(indiceTuplaComp); // [cite: 588]
+        }
+    }
+
+    // <Mientras> -> mientras <Comparacion> <Enunciados> fin-mientras
+    // PDF [cite: 594-607]
+    private void mientras() throws SemanticException {
+        match(PseudoLexer.MIENTRAS);
+
+        int indiceTuplaComp = generador.getIndiceSiguienteTupla(); // [cite: 596]
+        comparacion();
+
+        enunciados();
+
+        if (match(PseudoLexer.FIN_MIENTRAS)) {
+            generador.conectarMientras(indiceTuplaComp); // [cite: 602]
+        }
+    }
+
+    // <Comparacion> -> ( <Valor> <OperadorRelacional> <Valor> )
+    // PDF [cite: 608-621]
+    private void comparacion() throws SemanticException {
+        if (!match(PseudoLexer.LPAREN)) return;
+
+        Token val1 = valor();
+
+        Token op = currentToken();
+        // Debemos aceptar operadores relacionales provistos por el lexer
+        int opType = op.type;
+        boolean esOpRel = opType == PseudoLexer.LT || opType == PseudoLexer.GT ||
+                opType == PseudoLexer.LTE || opType == PseudoLexer.GTE ||
+                opType == PseudoLexer.NEQ || opType == PseudoLexer.EQ;
+        if (!esOpRel) {
+            System.out.println("Error: Se esperaba un operador relacional pero se encontró " + op.text);
+            errorSintactico = true;
+            return;
+        }
+        // Si es un operador relacional, consumimos
+        match(opType);
+
+        Token val2 = valor();
+
+        if (!match(PseudoLexer.RPAREN)) return;
+
+        generador.crearTuplaComparacion(val1, op, val2); // [cite: 616]
+    }
+
+    // <Valor> -> ID | NUM
+    private Token valor() throws SemanticException {
+        Token t = currentToken();
+        if (t.type == PseudoLexer.ID) {
+            match(PseudoLexer.ID);
+            validarDeclarada(t.text);
+            return t;
+        } else if (t.type == PseudoLexer.NUM) {
+            match(PseudoLexer.NUM);
+            return t;
+        } else {
+            System.out.println("Error: Se esperaba ID o NUMERO, se encontró " + t.text);
+            errorSintactico = true;
+            return t;
+        }
+    }
+
+    // Tu método de validación semántica
     private void validarDeclarada(String id) throws SemanticException {
-        // Se usa el método resolver para buscar la variable
         if (ts.resolver(id) == null) {
-            // Si la variable no se encuentra, se lanza una SemanticException
             throw new SemanticException("Error semántico: Variable '" + id + "' no ha sido declarada.");
         }
-    }
-
-    public TablaSimbolos getTablaSimbolos() {
-        return this.ts;
     }
 }
