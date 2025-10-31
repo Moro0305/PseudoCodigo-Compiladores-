@@ -1,0 +1,14 @@
+inicio-programa
+variables: base, altura, area
+
+escribir "--- Calculadora de Area ---"
+escribir "Dame el valor de la base: "
+leer base
+
+escribir "Dame el valor de la altura: "
+leer altura
+
+area = base * altura
+
+escribir "El area del rectangulo es: ", area
+fin-programa

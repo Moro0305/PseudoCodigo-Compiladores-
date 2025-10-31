@@ -1,0 +1,12 @@
+inicio-programa
+variables: celsius, fahrenheit
+
+escribir "--- Conversor de Temperatura ---"
+escribir "Ingresa los grados Celsius: "
+leer celsius
+
+fahrenheit = celsius * 1.8
+fahrenheit = fahrenheit + 32
+
+escribir "Grados Fahrenheit: ", fahrenheit
+fin-programa

@@ -1,0 +1,23 @@
+inicio-programa
+variables: numero
+
+escribir "--- Analizador de Numeros ---"
+escribir "Ingresa un numero (positivo, negativo o cero): "
+leer numero
+
+si (numero > 0)
+    entonces
+    escribir "El numero es POSITIVO."
+fin-si
+
+si (numero < 0)
+    entonces
+    escribir "El numero es NEGATIVO."
+fin-si
+
+si (numero = 0)
+    entonces
+    escribir "El numero es CERO."
+fin-si
+
+fin-programa

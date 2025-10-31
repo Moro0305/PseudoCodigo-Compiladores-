@@ -1,3 +1,7 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+
 public abstract class Tupla {
     protected int saltoVerdadero, saltoFalso;
 
@@ -24,6 +28,11 @@ public abstract class Tupla {
 
     @Override
     public String toString() {
+        // Se mantiene tu 'toString()'
         return "(" + this.getClass().getName() + ", " + saltoVerdadero + ", " + saltoFalso;
     }
+
+    // CAMBIO: Nuevo método abstracto para la ejecución
+    // Devuelve el índice de la siguiente tupla
+    public abstract int ejecutar(TablaSimbolos ts); // [cite: 46]
 }
